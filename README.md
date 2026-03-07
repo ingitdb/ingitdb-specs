@@ -21,6 +21,12 @@ Specifications, roadmap, and design documentation for [inGitDB](https://ingitdb.
 
 > When working locally, both repos share the same parent directory: `../ingitdb-cli/`
 
+## inGitDB Clients
+
+- [github.com/ingitdb/ingitdb-cli/pkg/ingitdb](https://github.com/ingitdb/ingitdb-cli/tree/main/pkg/ingitdb) — Go package for working with local inGitDB files
+- [github.com/ingitdb/dalgo2ingitdb](https://github.com/ingitdb/dalgo2ingitdb) — DALgo bridge to inGitDB
+- [@ingitdb/client](https://www.npmjs.com/package/@ingitdb/client) — JS package, implemented in TypeScript: [ingitdb-ts](https://github.com/ingitdb/ingitdb-ts)
+
 ## License
 
 Apache 2.0 — see [LICENSE](LICENSE).
