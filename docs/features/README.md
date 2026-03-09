@@ -16,3 +16,4 @@
 | [HTTP API Server](http-api-server.md)                     | pending     | OpenAPI-compatible REST API for reading and editing inGitDB data                                                                                   |
 | GraphQL                                                   | pending     | GraphQL interface auto-generated from collection schemas (Phase 8)                                                                                 |
 | [Migration Script Generator](migration.md)                | pending     | Generates forward and rollback migration scripts to sync a target database with a desired inGitDB version                                          |
+| [Diff](diff.md)                                           | pending     | Show record-level changes between two git refs, with optional field-level detail, commit annotations, collection/view scoping, and JSON/YAML output |
