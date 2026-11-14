@@ -159,9 +159,44 @@ Controls how records are physically stored.
 | `exclude_regex`     | `string`                                             | File names matching it are not records: not read, validated or counted    |
 | `content_field`     | `string`                                             | `markdown` format only: the field that receives the body                  |
 | `csv_cell_encoding` | `string`                                             | `json-v1`; `csv` format only                                              |
+| `key_encoding`      | `string`                                             | How a record key becomes a file or directory name and back: `none` (default) or `tilde-v1`. See [Record key encoding](#-record-key-encoding) |
 
 `markdown` needs type `map[string]any`; `csv` and `jsonl` need `[]map[string]any`; `ingr` cannot be
 `map[string]any`.
+
+### 🔹 Record key encoding
+
+A record key becomes a file name through `{key}` in `name`. It also names the directory that holds the record's subcollection instances. Without `key_encoding`, or with `none`, the name is the key as it is. Then a key that is not a safe file name (`a/b`, `..`, `k3v9q:agr`, `CON`) cannot be stored, and inGitDB shows a file name as the key.
+
+With `key_encoding: tilde-v1`, the key is encoded one byte at a time, and every reader shows the decoded key:
+
+- **Kept:** `A`–`Z`, `a`–`z`, `0`–`9` and `-` `_` `.` `@` `+` `=` `,`.
+- **Escaped:** every other byte, `~` included, is written as `~` and two upper-case hexadecimal digits.
+- **Also escaped:**
+  - a `.` that is the first or the last byte;
+  - the first byte of a key that, up to its first `.` and in any letter case, is a Windows device name (`CON`, `PRN`, `AUX`, `NUL`, `COM0`–`COM9`, `LPT0`–`LPT9`).
+- **Empty key:** has no name.
+
+| Key | File (`name: "{key}.yaml"`) |
+|---|---|
+| `k3v9q` | `k3v9q.yaml` |
+| `a/b` | `a~2Fb.yaml` |
+| `..` | `~2E~2E.yaml` |
+| `k3v9q:agr-swim-2026` | `k3v9q~3Aagr-swim-2026.yaml` |
+| `CON` | `~43ON.yaml` |
+| `é` | `~C3~A9.yaml` |
+
+Rules:
+
+- **One name per key.** A name decodes only if encoding the result gives it back. Any other name, such as `a~2f.yaml` or `a b.yaml`, names no record, and validation reports it.
+- **Letter case is kept.** On Windows and macOS, by default, `Ab.yaml` and `ab.yaml` are one file. Validation reports such pairs, and writers refuse to create one.
+- **255-byte limit.** With one record per file, a key whose encoded file name would exceed 255 bytes is an error. Keys are never shortened. Store such records in a collection that keeps its records in one file (`map[$record_id]map[$field_name]any`).
+- **Shared-file keys.** Keys inside a shared records file are not encoded there, only in their subcollection directories.
+- **Subcollections** declare their own `key_encoding`.
+
+`ingitdb.EncodeRecordKey` and `ingitdb.DecodeRecordKey` (ingitdb-go) implement the algorithm. The full specification is the ingitdb-go feature [record-key-encoding](https://github.com/ingitdb/ingitdb-go/blob/main/spec/features/record-key-encoding/README.md).
+
+Older tools reject a definition that declares `key_encoding`, instead of misreading it, so upgrade the readers first.
 
 ### 🔹 `record_file.type` values
 

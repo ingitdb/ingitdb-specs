@@ -33,6 +33,8 @@ The records of subcollection `<sub>` for parent `<key>` sit in `<records dir>/<k
 the parent's record file: `$records/<key>/<sub>/` by default, `<key>/<sub>/` with `records_dir: .`.
 See [Where subcollection records live](schema/subcollection.md#-where-subcollection-records-live).
 
+`<key>` is the record key as it is, unless the collection declares `record_file.key_encoding: tilde-v1`. Then `<key>` is the encoded key: `a/b` is written as `a~2Fb`. See [Record key encoding](schema/collection.md#-record-key-encoding).
+
 ## Config Files
 
 **`.ingitdb/root-collections.yaml`** — DB-level config: flat map of collection IDs to filesystem paths.
