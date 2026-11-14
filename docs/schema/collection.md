@@ -302,8 +302,9 @@ columns:
 
 ### 🔹 Nested objects, maps and lists (`columns`, `values`, `items`)
 
-A map or list column checks only that the value is a map or a list. To check what is inside, give it
-a shape with the same column definition, recursively:
+A map column checks only that the value is a map, and a list column checks its element type
+(`[]string`) but nothing else. To check what is inside, give it a shape with the same column
+definition, recursively:
 
 - `columns` — the fields of a nested object (on `any` or a map type). A key the object holds but
   `columns` does not declare is an undeclared-field finding.
@@ -346,9 +347,10 @@ id: collection ids alternating with parent keys, ending with a collection id. A 
 | ----------- | ------- | ------- |
 | a literal   | that parent record | `foreign_key: ext/commitius/cmSessions` |
 | `$same`     | the key the referring record itself has at that level (only while the path follows the referring collection's own path) | `foreign_key: spaces/$same/ext/$same/financialAgreements` (same space and extension) |
-| `{field}`   | the referring record's value of `field` | `foreign_key: spaces/{spaceID}/ext/calendarius/happenings` |
+| `{field}`   | the referring record's value of `field` (a stored column, not `formula`; for the record's own key use `$same`) | `foreign_key: spaces/{spaceID}/ext/calendarius/happenings` |
 
-The path is checked when the definition loads. Each value must be a record key of the one target
+A parent key, literal or from a field, must be a plain record key (no `/`, `\`, `.` or `..`), so a
+path never reaches outside its parent's directory. The path is checked when the definition loads. Each value must be a record key of the one target
 instance the path gives for that record; a finding names the instance, e.g.
 `spaces/s2/ext/calendarius/financialAgreements`. No `$fk` view is built for a path, and
 dalgo2ingitdb does not check it at write time; `ingitdb validate` does.
