@@ -2,7 +2,7 @@
 
 Each collection is described by a `definition.yaml` file that controls how records are stored
 and what columns (fields) they contain. The file structure maps to the
-[`CollectionDef`](../../pkg/ingitdb/collection_def.go) type.
+[`CollectionDef`](https://github.com/ingitdb/ingitdb-go/blob/main/ingitdb/collection_def.go) type.
 
 See the [Collection README Builder](../components/readme-builders/collection.md) for details on
 how a collection's `README.md` is automatically populated and updated.
@@ -125,15 +125,24 @@ an **error**. Only one layout may be active per directory.
 
 ## 📂 Top-level fields
 
-| Field           | Type                                                         | Description                                     |
-| --------------- | ------------------------------------------------------------ | ----------------------------------------------- |
-| `titles`        | `map[locale]string`                                          | Human-readable collection name, keyed by locale |
-| `record_file`   | [`RecordFileDef`](../../pkg/ingitdb/record_file_def.go)      | How records are stored on disk (required)       |
-| `data_dir`      | `string`                                                     | Custom data directory (optional; see [layout notes](#-shared-directory-layout-details)) |
-| `readme`        | [`CollectionReadmeDef`](../../pkg/ingitdb/collection_def.go) | README.md generation configuration (optional)   |
-| `columns`       | `map[string]`[`ColumnDef`](../../pkg/ingitdb/column_def.go)  | Column (field) definitions                      |
-| `columns_order` | `[]string`                                                   | Display order for columns                       |
-| `default_view`  | [`*ViewDef` (inline)](../features/default-collection-view.md) | Inline default web export view — exported to `$ingitdb/` for web-app consumption (optional) |
+Unknown keys are a load error.
+
+| Field                 | Type                                                         | Description                                     |
+| --------------------- | ------------------------------------------------------------ | ----------------------------------------------- |
+| `inherits`            | `string`                                                     | Path of a partial base definition to overlay under this one, relative to this file's directory (optional) |
+| `titles`              | `map[locale]string`                                          | Human-readable collection name, keyed by locale |
+| `record_file`         | [`RecordFileDef`](https://github.com/ingitdb/ingitdb-go/blob/main/ingitdb/record_file_def.go)      | How records are stored on disk (required)       |
+| `data_dir`            | `string`                                                     | Custom data directory (optional; see [layout notes](#-shared-directory-layout-details)) |
+| `readme`              | [`CollectionReadmeDef`](https://github.com/ingitdb/ingitdb-go/blob/main/ingitdb/collection_def.go) | README.md generation configuration (optional)   |
+| `columns`             | `map[string]`[`ColumnDef`](https://github.com/ingitdb/ingitdb-go/blob/main/ingitdb/column_def.go)  | Column (field) definitions (required, at least one) |
+| `columns_order`       | `[]string`                                                   | Display order for columns                       |
+| `primary_key`         | `[]string`                                                   | Source primary key columns, written by importers (optional) |
+| `source_schema`       | object                                                       | Relational schema of an imported collection, written by importers (optional) |
+| `default_view`        | [`*ViewDef` (inline)](../features/default-collection-view.md) | Inline default web export view — exported to `$ingitdb/` for web-app consumption (optional) |
+| `min_records_count`   | `int`                                                        | The collection must hold at least this many records; for a subcollection, each parent record's instance (optional) |
+| `max_records_count`   | `int`                                                        | The collection may hold at most this many records; `0` means empty (optional) |
+| `conflict_resolution` | object                                                       | Per-collection conflict-resolution overrides (optional) |
+| `cache_control`       | `string`                                                     | HTTP Cache-Control directive for this collection's files (optional) |
 
 ---
 
@@ -141,11 +150,54 @@ an **error**. Only one layout may be active per directory.
 
 Controls how records are physically stored.
 
-| Field    | Type                                                 | Description                                                               |
-| -------- | ---------------------------------------------------- | ------------------------------------------------------------------------- |
-| `name`   | `string`                                             | File name or pattern. May contain `{key}` and `{fieldName}` placeholders. |
-| `format` | `string`                                             | File format: `json`, `yaml`, or `yml`                                     |
-| `type`   | [`RecordType`](../../pkg/ingitdb/record_file_def.go) | Layout of records within the file (see below)                             |
+| Field               | Type                                                 | Description                                                               |
+| ------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------- |
+| `name`              | `string`                                             | File name or pattern. May contain `{key}` and `{fieldName}` placeholders. |
+| `format`            | `string`                                             | File format, lowercase: `yaml`, `yml`, `json`, `markdown`, `toml`, `ingr`, `csv`, `jsonl` |
+| `type`              | [`RecordType`](https://github.com/ingitdb/ingitdb-go/blob/main/ingitdb/record_file_def.go) | Layout of records within the file (see below)                             |
+| `records_dir`       | `string`                                             | Directory of the record files below the data directory. `.` is the data directory itself. Default: `$records` when `name` contains `{key}`, else the data directory |
+| `exclude_regex`     | `string`                                             | File names matching it are not records: not read, validated or counted    |
+| `content_field`     | `string`                                             | `markdown` format only: the field that receives the body                  |
+| `csv_cell_encoding` | `string`                                             | `json-v1`; `csv` format only                                              |
+| `key_encoding`      | `string`                                             | How a record key becomes a file or directory name and back: `none` (default) or `tilde-v1`. See [Record key encoding](#-record-key-encoding) |
+
+`markdown` needs type `map[string]any`; `csv` and `jsonl` need `[]map[string]any`; `ingr` cannot be
+`map[string]any`.
+
+### 🔹 Record key encoding
+
+A record key becomes a file name through `{key}` in `name`. It also names the directory that holds the record's subcollection instances. Without `key_encoding`, or with `none`, the name is the key as it is. Then a key that is not a safe file name (`a/b`, `..`, `k3v9q:agr`, `CON`) cannot be stored, and inGitDB shows a file name as the key.
+
+With `key_encoding: tilde-v1`, the key is encoded one byte at a time, and every reader shows the decoded key:
+
+- **Kept:** `A`–`Z`, `a`–`z`, `0`–`9` and `-` `_` `.` `@` `+` `=` `,`.
+- **Escaped:** every other byte, `~` included, is written as `~` and two upper-case hexadecimal digits.
+- **Also escaped:**
+  - a `.` that is the first or the last byte;
+  - the first byte of a key that, up to its first `.` and in any letter case, is a Windows device name (`CON`, `PRN`, `AUX`, `NUL`, `COM0`–`COM9`, `LPT0`–`LPT9`).
+- **Empty key:** has no name.
+
+| Key | File (`name: "{key}.yaml"`) |
+|---|---|
+| `k3v9q` | `k3v9q.yaml` |
+| `a/b` | `a~2Fb.yaml` |
+| `..` | `~2E~2E.yaml` |
+| `k3v9q:agr-swim-2026` | `k3v9q~3Aagr-swim-2026.yaml` |
+| `CON` | `~43ON.yaml` |
+| `é` | `~C3~A9.yaml` |
+
+Rules:
+
+- **One name per key.** A name decodes only if encoding the result gives it back. Any other name, such as `a~2f.yaml` or `a b.yaml`, names no record, and validation reports it.
+- **Letter case is kept.** On Windows and macOS, by default, `Ab.yaml` and `ab.yaml` are one file, and `Ab/` and `ab/` are one directory. Validation reports such pairs, record files and parent record directories alike, and writers refuse to create one. Reads and deletes are not checked.
+- **255-byte limit.** With one record per file, a key whose encoded file name would exceed 255 bytes is an error. Keys are never shortened. Store such records in a collection that keeps its records in one file (`map[$record_id]map[$field_name]any`). This holds for every one-record-per-file collection, with or without `key_encoding` (without one, the key is measured as it is): writers, the GitHub driver and `validate` fail with the length and this remedy. For a collection without `key_encoding` this adds an error only where a write already failed (every common file system refuses such a name) or where the GitHub driver committed a name no checkout can hold.
+- **Hidden files are skipped.** No key encodes to a name starting with `.`, so readers of a `tilde-v1` collection skip such a file (an editor lock, a macOS `._` file) instead of failing; `validate` still reports it as a name that names no record.
+- **Shared-file keys.** Keys inside a shared records file are not encoded there, only in their subcollection directories.
+- **Subcollections** declare their own `key_encoding`.
+
+`ingitdb.EncodeRecordKey` and `ingitdb.DecodeRecordKey` (ingitdb-go) implement the algorithm. The full specification is the ingitdb-go feature [record-key-encoding](https://github.com/ingitdb/ingitdb-go/blob/main/spec/features/record-key-encoding/README.md).
+
+Tools built before `key_encoding` do not know it. Some reject such a definition; others ignore the setting and show the encoded names as keys. Upgrade every reader of a database before declaring it.
 
 ### 🔹 `record_file.type` values
 
@@ -160,13 +212,14 @@ record_file:
   format: json
 ```
 
-> **`$records/` subdirectory** — When `{key}` is present in `name`, inGitDB automatically
-> stores all record files under a `$records/` subdirectory inside the collection directory,
+> **`$records/` subdirectory** — When `{key}` is present in `name` and `records_dir` is not set,
+> inGitDB stores all record files under a `$records/` subdirectory inside the collection directory,
 > rather than directly in the collection directory. This keeps the collection's `README.md`
 > visible at the top of the directory listing on GitHub.com — if records were stored at the
 > collection root, a large number of them would push `README.md` below the initial render
 > viewport. The `$` prefix signals to viewers that this is an inGitDB-managed directory,
-> consistent with the `/$ingitdb` convention.
+> consistent with the `/$ingitdb` convention. Set `records_dir: .` to keep record files
+> directly in the collection directory (as a Firestore mirror does: `spaces/k3v9q.json`).
 
 File `$records/ireland.json`:
 
@@ -177,7 +230,7 @@ File `$records/ireland.json`:
 }
 ```
 
-#### 🔸 `map[string]any` — list of records in one file
+#### 🔸 `[]map[string]any` — list of records in one file
 
 All records are stored as an array (or YAML list) in a single file.
 
@@ -197,26 +250,8 @@ File `statuses.yaml`:
   title: In Progress
 ```
 
-#### 🔸 `map[string]map[string]any` — dictionary of records
-
-All records are stored in one file as a dictionary where the top-level key is
-the record ID.
-
-```yaml
-record_file:
-  name: "statuses.yaml"
-  type: "map[string]map[string]any"
-  format: yaml
-```
-
-File `statuses.yaml`:
-
-```yaml
-new:
-  titles: { en: New, ru: Новая }
-in_progress:
-  titles: { en: In Progress, ru: В работе }
-```
+> `map[string]map[string]any` is **not** a record type: it is rejected at load. A dictionary of
+> records is spelled `map[$record_id]map[$field_name]any` (below).
 
 #### 🔸 `map[$record_id]map[$field_name]any` — all records in one file keyed by ID
 
@@ -253,31 +288,144 @@ File `tags.json`:
 
 Each entry under `columns` is a **ColumnDef** keyed by the field name.
 
-| Field         | Type                                             | Description                       |
-| ------------- | ------------------------------------------------ | --------------------------------- |
-| `type`        | [`ColumnType`](../../pkg/ingitdb/column_type.go) | Field type (required)             |
-| `required`    | `bool`                                           | Whether the field must be present |
-| `title`       | `string`                                         | Display label                     |
-| `titles`      | `map[locale]string`                              | Localized display labels          |
-| `length`      | `int`                                            | Exact length constraint           |
-| `min_length`  | `int`                                            | Minimum length                    |
-| `max_length`  | `int`                                            | Maximum length                    |
-| `foreign_key` | `string`                                         | Reference to another collection   |
-| `locale`      | `string`                                         | Locale shortcut (see below)       |
+| Field           | Type                                             | Description                       |
+| --------------- | ------------------------------------------------ | --------------------------------- |
+| `type`          | [`ColumnType`](https://github.com/ingitdb/ingitdb-go/blob/main/ingitdb/column_type.go) | Field type (required)             |
+| `required`      | `bool`                                           | Whether the field must be present |
+| `required_when` | `string`                                         | Starlark expression over stored sibling fields; required when True. Not combined with `required` |
+| `title`         | `string`                                         | Display label                     |
+| `titles`        | `map[locale]string`                              | Localized display labels          |
+| `valueTitle`    | `string`                                         | Display title for the value       |
+| `length`        | `int`                                            | Exact length: characters, list elements or map entries |
+| `min_length`    | `int`                                            | Minimum length                    |
+| `max_length`    | `int`                                            | Maximum length                    |
+| `min_value`     | `number`                                         | Inclusive lower bound (numeric columns) |
+| `max_value`     | `number`                                         | Inclusive upper bound (numeric columns) |
+| `enum`          | list                                             | Permitted values                  |
+| `foreign_key`   | `string`                                         | Id of the root collection whose record keys the value must match; a bare id is tried module-first. A list value is checked element by element. May name a subcollection by path (see below) |
+| `columns`       | `map[string]ColumnDef`                           | Fields of a nested object (see below) |
+| `values`        | `ColumnDef`                                      | Shape of every value of a map (see below) |
+| `items`         | `ColumnDef`                                      | Shape of every element of a list (see below) |
+| `locale`        | `string`                                         | Locale shortcut (see below)       |
+| `format`        | `string`                                         | Free-form content hint (markdown, html, uri, ...); not validated |
+| `formula`       | `string`                                         | Starlark expression of a computed column; its value is never stored |
 
 ### 🔹 Column types
 
-| Type                | Description                                     |
-| ------------------- | ----------------------------------------------- |
-| `string`            | Plain text                                      |
-| `int`               | Integer number                                  |
-| `float`             | Floating-point number                           |
-| `bool`              | Boolean flag                                    |
-| `date`              | Date (ISO 8601)                                 |
-| `time`              | Time                                            |
-| `datetime`          | Date and time                                   |
-| `any`               | Untyped value                                   |
-| `map[locale]string` | Localized string map (see Locale columns below) |
+| Type                    | Description                                     |
+| ----------------------- | ----------------------------------------------- |
+| `string`                | Plain text                                      |
+| `int`                   | Integer number                                  |
+| `float`                 | Floating-point number                           |
+| `bool`                  | Boolean flag                                    |
+| `date`                  | Date, `YYYY-MM-DD` by convention                |
+| `time`                  | Time                                            |
+| `datetime`              | Date and time (`YYYY-MM-DDTHH:MM:SS`, zone optional) |
+| `any`                   | Untyped value                                   |
+| `map[locale]string`     | Localized string map (see Locale columns below) |
+| `map[K]V`               | A map; `K` is `locale`, `string`, `int`, `number`, `bool` or `date`. The value type `V` is not checked |
+| `[]T`                   | A list; `T` is `string`, `int`, `float`, `bool`, `date`, `time`, `datetime` or `any`. Every element must match `T` |
+
+The column named `$ID` describes the record key. When it is typed `int`, `float`, `bool`, `date`,
+`time` or `datetime`, every record key must parse as that type, in one written form, so two files
+cannot hold one value:
+
+| `$ID` type | Accepted key | Rejected key |
+| ---------- | ------------ | ------------ |
+| `int`      | `42`, `-7`, `0` | `+5`, `007`, `4.2` |
+| `float`    | shortest decimal form: `4.2`, `1000`, `-2.25` | `1.50`, `1e3`, `1e+06`, `1_000`, `+1`, `.5`, `-0`, `NaN`, `Inf`, hex |
+| `bool`     | `true`, `false` | `yes`, `True` |
+| `date`     | `2026-11-24` | `2026-02-30`, `2026-2-28`, `20261124` |
+| `time`     | `7:30`, `07:30`, `7:30:00`, `07:30:15.5` (hour of one or two digits) | `24:00`, `7:3`, `07:30Z` |
+| `datetime` | `2026-11-24T10:00:00`, with optional fractional seconds and an optional zone (`Z`, `+01:00`) | `2026-11-24 10:00:00`, `2026-11-24` |
+
+**Keys are stricter than columns.** An ordinary `date`, `time` or `datetime` column accepts any text,
+as it always has, so `2026-02-30` passes in a `date` column and fails as a `date` key. Tightening
+columns would newly reject stored values, so it is an opt-in: `datavalidator.StrictTemporalFindings`
+in ingitdb-go reports column values the key parser rejects, without changing `validate`.
+
+```yaml
+columns:
+  $ID:
+    type: date   # days/2026-11-24.json passes, days/notadate.json fails
+```
+
+### 🔹 Nested objects, maps and lists (`columns`, `values`, `items`)
+
+A map column checks only that the value is a map, and a list column checks its element type
+(`[]string`) but nothing else. To check what is inside, give it a shape with the same column
+definition, recursively:
+
+- `columns` — the fields of a nested object, on `any` or a map type other than `map[locale]string`.
+  A key the object holds but `columns` does not declare is an undeclared-field finding. On `any`,
+  only an object value is checked: a list or a scalar in that column gets no finding.
+- `values` — every value of a map (not `map[locale]string`), e.g. a map keyed by id whose values
+  are objects. Its `type` must be the map's value type written the same way: `map[string]float`
+  takes `values: {type: float}`, not `int`.
+- `items` — every element of a list `[]T`; its `type` must be `T` (for `[]any`, any element type).
+
+**A list of objects** is written `type: "[]any"` with `items: {type: map[string]any, columns: …}`; `[]map[...]` is not a column type. Each element must then be an object and is checked against `columns`:
+
+```yaml
+columns:
+  members:                    # [{"role": "owner"}, {"role": "viewer"}]
+    type: "[]any"
+    items:
+      type: map[string]any
+      columns:
+        role: { type: string, required: true }
+```
+
+```yaml
+columns:
+  slots:                      # {"sl1": {"durationInMinutes": 45, "weekdays": ["tu"]}}
+    type: map[string]any
+    values:
+      type: map[string]any
+      columns:
+        durationInMinutes:
+          type: int
+          required: true
+        weekdays:
+          type: "[]string"
+          items:
+            type: string
+            enum: [mo, tu, we, th, fr, sa, su]
+  ref:                        # {"happeningID": "h1", "spaceID": "s1"}
+    type: map[string]any
+    columns:
+      happeningID: { type: string, required: true }
+      spaceID: { type: string, required: true }
+```
+
+Findings name the path: `slots.sl1.durationInMinutes`, `members[2].role`. A nested definition
+supports `type`, `required`, `enum`, lengths, value ranges and its own `columns`/`values`/`items`;
+`formula`, `required_when`, `foreign_key` and `locale` are top-level only. A column without a shape is
+checked as before.
+
+> **Upgrade every reader first.** Definitions are read strictly, so a tool built before these
+> fields existed refuses the whole database once one definition uses `columns`, `values` or `items`,
+> and an older `validate` or storage driver rejects a path `foreign_key`. Move every consumer (the
+> CLI, the storage drivers, DataTug, and backends that embed ingitdb-go) to a release that has
+> them before any definition uses them.
+
+### 🔹 Foreign keys into subcollections
+
+`foreign_key` may name a subcollection by a path like a Firestore document path without the final
+id: collection ids alternating with parent keys, ending with a collection id. A parent key is:
+
+| Key segment | Meaning | Example |
+| ----------- | ------- | ------- |
+| a literal   | that parent record | `foreign_key: ext/commitius/cmSessions` |
+| `$same`     | the key the referring record itself has at that level (only while the path follows the referring collection's own path) | `foreign_key: spaces/$same/ext/$same/financialAgreements` (same space and extension) |
+| `{field}`   | the referring record's value of `field` (a stored column, not `formula`; for the record's own key use `$same`) | `foreign_key: spaces/{spaceID}/ext/calendarius/happenings` |
+
+A parent key, literal or from a field, must be a plain record key: no `/` or `\`, and not `.` or `..`
+(a key such as `cal.endarius` is fine), so a
+path never reaches outside its parent's directory. The path is checked when the definition loads. Each value must be a record key of the one target
+instance the path gives for that record; a finding names the instance, e.g.
+`spaces/s2/ext/calendarius/financialAgreements`. No `$fk` view is built for a path, and
+dalgo2ingitdb does not check it at write time; `ingitdb validate` does.
 
 ---
 
