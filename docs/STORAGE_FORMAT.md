@@ -22,16 +22,16 @@ A database is a directory tree inside a Git repository:
         │   └── views/                       # View definitions
         │       └── <name>.yaml
         ├── $records/                        # record files (default when name has {key})
-        │   └── <key>.json
+        │   ├── <key>.json
+        │   └── <key>/<sub>/...              # records of subcollection <sub> for parent <key>
         └── $views/
             └── <view-name>/
                 └── <partition>.md         # Materialized view output files
 ```
 
-With `records_dir: .` the record files sit in the collection directory itself (`<key>.json`), and the
-records of subcollection `<sub>` for parent `<key>` sit in `<key>/<sub>/`; every tool agrees on that
-layout. Under the default `records_dir` (`$records`), where subcollection records live is an open
-decision; see [Where subcollection records live](schema/subcollection.md#-where-subcollection-records-live).
+The records of subcollection `<sub>` for parent `<key>` sit in `<records dir>/<key>/<sub>/`, next to
+the parent's record file: `$records/<key>/<sub>/` by default, `<key>/<sub>/` with `records_dir: .`.
+See [Where subcollection records live](schema/subcollection.md#-where-subcollection-records-live).
 
 ## Config Files
 
