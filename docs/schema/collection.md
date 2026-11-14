@@ -189,14 +189,14 @@ With `key_encoding: tilde-v1`, the key is encoded one byte at a time, and every 
 Rules:
 
 - **One name per key.** A name decodes only if encoding the result gives it back. Any other name, such as `a~2f.yaml` or `a b.yaml`, names no record, and validation reports it.
-- **Letter case is kept.** On Windows and macOS, by default, `Ab.yaml` and `ab.yaml` are one file. Validation reports such pairs, and writers refuse to create one.
+- **Letter case is kept.** On Windows and macOS, by default, `Ab.yaml` and `ab.yaml` are one file, and `Ab/` and `ab/` are one directory. Validation reports such pairs, record files and parent record directories alike, and writers refuse to create one. Reads and deletes are not checked.
 - **255-byte limit.** With one record per file, a key whose encoded file name would exceed 255 bytes is an error. Keys are never shortened. Store such records in a collection that keeps its records in one file (`map[$record_id]map[$field_name]any`).
 - **Shared-file keys.** Keys inside a shared records file are not encoded there, only in their subcollection directories.
 - **Subcollections** declare their own `key_encoding`.
 
 `ingitdb.EncodeRecordKey` and `ingitdb.DecodeRecordKey` (ingitdb-go) implement the algorithm. The full specification is the ingitdb-go feature [record-key-encoding](https://github.com/ingitdb/ingitdb-go/blob/main/spec/features/record-key-encoding/README.md).
 
-Older tools reject a definition that declares `key_encoding`, instead of misreading it, so upgrade the readers first.
+Tools built before `key_encoding` do not know it. Some reject such a definition; others ignore the setting and show the encoded names as keys. Upgrade every reader of a database before declaring it.
 
 ### 🔹 `record_file.type` values
 
