@@ -288,8 +288,9 @@ Each entry under `columns` is a **ColumnDef** keyed by the field name.
 | `[]T`                   | A list; `T` is `string`, `int`, `float`, `bool`, `date`, `time`, `datetime` or `any`. Every element must match `T` |
 
 For ordinary columns the temporal types accept any string. The column named `$ID` describes the
-record key; when it is typed `int`, `float`, `bool`, `date` (`YYYY-MM-DD`), `time` (`HH:MM` or
-`HH:MM:SS`) or `datetime` (RFC 3339), every record key must parse as that type:
+record key; when it is typed `int` (canonical: no `+`, no leading zeros), `float` (finite), `bool`,
+`date` (`YYYY-MM-DD`), `time` (`H:MM` or `HH:MM:SS`, optional fractional seconds) or `datetime`
+(`YYYY-MM-DDTHH:MM:SS`, optional fractional seconds and zone), every record key must parse as that type:
 
 ```yaml
 columns:

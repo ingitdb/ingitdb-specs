@@ -172,12 +172,12 @@ ext/commitius/cmSessions/s1.json                    <- ext/commitius.json does n
 ```
 
 **The parent record file is optional.** As in Firestore, a parent may own subcollections without
-existing itself: in the last line there is no `ext/commitius.json`. `ingitdb validate` finds the
+existing itself: in the last line there is no `ext/commitius.json`. Validation (ingitdb-go) finds the
 parent from the directory `ext/commitius/cmSessions/` and validates `s1.json` all the same, at any
 depth. A missing parent is not counted as a record of the parent collection. No placeholder file is
 needed (an empty `{}` parent file still works). Only a directory that contains the subcollection's
-own directory counts as a parent; hidden directories, `$records` and names matched by the parent's
-`exclude_regex` never do.
+own directory counts as a parent; hidden directories, `$`-prefixed ones (`$records`, `$views`) and
+names matched by the parent's `exclude_regex` never do.
 
 `ingitdb validate` prints one count line per subcollection, by its full schema path (for example
 `All 2 records are valid for collection: spaces/ext/days`), adding up all parent instances.
