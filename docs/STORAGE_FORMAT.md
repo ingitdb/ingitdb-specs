@@ -18,9 +18,12 @@ A database is a directory tree inside a Git repository:
         ├── .collection/
         │   ├── definition.yaml               # Collection schema
         │   ├── subcollections/              # Subcollection definitions
-        │   │   └── <name>.yaml
+        │   │   └── <name>/definition.yaml
         │   └── views/                       # View definitions
         │       └── <name>.yaml
+        ├── $records/                        # record files (default when name has {key})
+        │   ├── <key>.json
+        │   └── <key>/<sub>/...              # records of subcollection <sub> for parent <key>
         └── $views/
             └── <view-name>/
                 └── <partition>.md         # Materialized view output files
@@ -47,18 +50,17 @@ languages:
   - optional: ru
 ```
 
-## Collection Schema (.definition.yaml)
+## Collection Schema (`.collection/definition.yaml`)
 
-**`.definition.yaml`** — Collection schema: titles (i18n), column definitions, record file format.
+**`.collection/definition.yaml`** — Collection schema: titles (i18n), column definitions, record file format.
 
 ```yaml
 titles:
   en: Tasks
-data_dir: $records
 record_file:
-  name: "$records/{key}.json"
-  type: "[]map[string]any" # or "map[string]any" (single record) or "map[string]map[string]any" (keyed dict)
-  format: json # or yaml
+  name: "{key}.json" # records go to $records/ unless records_dir says otherwise
+  type: "map[string]any" # or "[]map[string]any" (list in one file) or "map[$record_id]map[$field_name]any" (keyed dict)
+  format: json # or yaml, yml, markdown, toml, ingr, csv, jsonl
 columns:
   title:
     type: string
@@ -75,11 +77,13 @@ columns:
 
 ## Column Types
 
-`string`, `int`, `float`, `bool`, `date`, `time`, `datetime`, `map[locale]string`, `any`
+`string`, `int`, `float`, `bool`, `date`, `time`, `datetime`, `any`, `map[locale]string`, `map[K]V`, and lists `[]T`. See [schema/collection.md](schema/collection.md#-column-types).
 
 ## Record Files
 
-**Record files** live in the collection's `data_dir`. A file holds either one record (`map[string]any`) or an array of records (`[]map[string]any`), as declared in `record_file.type`.
+**Record files** live in the collection's `data_dir`, below `record_file.records_dir`. A file holds one record (`map[string]any`), a list of records (`[]map[string]any`), or a map of records keyed by id (`map[$record_id]map[$field_name]any`), as declared in `record_file.type`.
+
+A subcollection's records live in `<parent records dir>/<parentKey>/<sub>/`. The parent record file is optional, as in Firestore. See [schema/subcollection.md](schema/subcollection.md#-where-subcollection-records-live).
 
 ## View Definitions
 
