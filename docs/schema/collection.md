@@ -284,7 +284,7 @@ Each entry under `columns` is a **ColumnDef** keyed by the field name.
 | `bool`                  | Boolean flag                                    |
 | `date`                  | Date, `YYYY-MM-DD` by convention                |
 | `time`                  | Time                                            |
-| `datetime`              | Date and time, RFC 3339 by convention           |
+| `datetime`              | Date and time (`YYYY-MM-DDTHH:MM:SS`, zone optional) |
 | `any`                   | Untyped value                                   |
 | `map[locale]string`     | Localized string map (see Locale columns below) |
 | `map[K]V`               | A map; `K` is `locale`, `string`, `int`, `number`, `bool` or `date`. The value type `V` is not checked |
@@ -320,10 +320,13 @@ A map column checks only that the value is a map, and a list column checks its e
 (`[]string`) but nothing else. To check what is inside, give it a shape with the same column
 definition, recursively:
 
-- `columns` — the fields of a nested object (on `any` or a map type). A key the object holds but
-  `columns` does not declare is an undeclared-field finding.
-- `values` — every value of a map, e.g. a map keyed by id whose values are objects.
-- `items` — every element of a list.
+- `columns` — the fields of a nested object, on `any` or a map type other than `map[locale]string`.
+  A key the object holds but `columns` does not declare is an undeclared-field finding. On `any`,
+  only an object value is checked: a list or a scalar in that column gets no finding.
+- `values` — every value of a map (not `map[locale]string`), e.g. a map keyed by id whose values
+  are objects. Its `type` must be the map's value type written the same way: `map[string]float`
+  takes `values: {type: float}`, not `int`.
+- `items` — every element of a list `[]T`; its `type` must be `T`.
 
 ```yaml
 columns:
@@ -352,6 +355,12 @@ supports `type`, `required`, `enum`, lengths, value ranges and its own `columns`
 `formula`, `required_when`, `foreign_key` and `locale` are top-level only. A column without a shape is
 checked as before.
 
+> **Upgrade every reader first.** Definitions are read strictly, so a tool built before these
+> fields existed refuses the whole database once one definition uses `columns`, `values` or `items`,
+> and an older `validate` or storage driver rejects a path `foreign_key`. Move every consumer (the
+> CLI, the storage drivers, DataTug, and backends that embed ingitdb-go) to a release that has
+> them before any definition uses them.
+
 ### 🔹 Foreign keys into subcollections
 
 `foreign_key` may name a subcollection by a path like a Firestore document path without the final
@@ -363,7 +372,8 @@ id: collection ids alternating with parent keys, ending with a collection id. A 
 | `$same`     | the key the referring record itself has at that level (only while the path follows the referring collection's own path) | `foreign_key: spaces/$same/ext/$same/financialAgreements` (same space and extension) |
 | `{field}`   | the referring record's value of `field` (a stored column, not `formula`; for the record's own key use `$same`) | `foreign_key: spaces/{spaceID}/ext/calendarius/happenings` |
 
-A parent key, literal or from a field, must be a plain record key (no `/`, `\`, `.` or `..`), so a
+A parent key, literal or from a field, must be a plain record key: no `/` or `\`, and not `.` or `..`
+(a key such as `cal.endarius` is fine), so a
 path never reaches outside its parent's directory. The path is checked when the definition loads. Each value must be a record key of the one target
 instance the path gives for that record; a finding names the instance, e.g.
 `spaces/s2/ext/calendarius/financialAgreements`. No `$fk` view is built for a path, and
