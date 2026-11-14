@@ -290,9 +290,23 @@ Each entry under `columns` is a **ColumnDef** keyed by the field name.
 | `map[K]V`               | A map; `K` is `locale`, `string`, `int`, `number`, `bool` or `date`. The value type `V` is not checked |
 | `[]T`                   | A list; `T` is `string`, `int`, `float`, `bool`, `date`, `time`, `datetime` or `any`. Every element must match `T` |
 
-For ordinary columns the temporal types accept any string. The column named `$ID` describes the
-record key; when it is typed `int`, `float`, `bool`, `date` (`YYYY-MM-DD`), `time` (`HH:MM` or
-`HH:MM:SS`) or `datetime` (RFC 3339), every record key must parse as that type:
+The column named `$ID` describes the record key. When it is typed `int`, `float`, `bool`, `date`,
+`time` or `datetime`, every record key must parse as that type, in one written form, so two files
+cannot hold one value:
+
+| `$ID` type | Accepted key | Rejected key |
+| ---------- | ------------ | ------------ |
+| `int`      | `42`, `-7`, `0` | `+5`, `007`, `4.2` |
+| `float`    | shortest decimal form: `4.2`, `1000`, `-2.25` | `1.50`, `1e3`, `1e+06`, `1_000`, `+1`, `.5`, `-0`, `NaN`, `Inf`, hex |
+| `bool`     | `true`, `false` | `yes`, `True` |
+| `date`     | `2026-11-24` | `2026-02-30`, `2026-2-28`, `20261124` |
+| `time`     | `7:30`, `07:30`, `7:30:00`, `07:30:15.5` (hour of one or two digits) | `24:00`, `7:3`, `07:30Z` |
+| `datetime` | `2026-11-24T10:00:00`, with optional fractional seconds and an optional zone (`Z`, `+01:00`) | `2026-11-24 10:00:00`, `2026-11-24` |
+
+**Keys are stricter than columns.** An ordinary `date`, `time` or `datetime` column accepts any text,
+as it always has, so `2026-02-30` passes in a `date` column and fails as a `date` key. Tightening
+columns would newly reject stored values, so it is an opt-in: `datavalidator.StrictTemporalFindings`
+in ingitdb-go reports column values the key parser rejects, without changing `validate`.
 
 ```yaml
 columns:

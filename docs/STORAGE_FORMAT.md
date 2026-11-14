@@ -29,6 +29,10 @@ A database is a directory tree inside a Git repository:
                 └── <partition>.md         # Materialized view output files
 ```
 
+The records of subcollection `<sub>` for parent `<key>` sit in `<records dir>/<key>/<sub>/`, next to
+the parent's record file: `$records/<key>/<sub>/` by default, `<key>/<sub>/` with `records_dir: .`.
+See [Where subcollection records live](schema/subcollection.md#-where-subcollection-records-live).
+
 ## Config Files
 
 **`.ingitdb/root-collections.yaml`** — DB-level config: flat map of collection IDs to filesystem paths.

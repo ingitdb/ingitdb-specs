@@ -150,17 +150,31 @@ columns:
 
 ## 📂 Where subcollection records live
 
-A subcollection has one instance per parent record. Its records live in a directory named by the
-parent key, next to the parent's record files:
+A subcollection has one instance per parent record. The definition decides where it lives: in a
+directory named by the parent key, **inside the parent's records directory**, next to the parent's
+record file:
 
 ```
 <parent data dir>/<parent records_dir>/<parentKey>/<sub>/
 ```
 
-`<parent records_dir>` is the parent's `record_file.records_dir` (`.` means the data directory
-itself; the default is `$records` when the parent's `name` contains `{key}`). Inside that directory
-the subcollection's own `record_file` applies, exactly as for a root collection. The rule repeats at
-every depth.
+`<parent records_dir>` is the parent's `record_file.records_dir`: `.` means the data directory
+itself, and when it is omitted it is `$records` for a `name` that contains `{key}` and the data
+directory otherwise. Inside that directory the subcollection's own `record_file` applies, exactly
+as for a root collection, and the rule repeats at every depth. This is the storage convention of
+the ingitdb-go Feature
+[subcollection-record-validation](https://github.com/ingitdb/ingitdb-go/blob/main/spec/features/subcollection-record-validation/README.md)
+(REQ `subcollection-storage-convention`), with `records_dir` from
+[explicit-record-base-directory](https://github.com/ingitdb/ingitdb-go/blob/main/spec/features/explicit-record-base-directory/README.md);
+ingitdb-go is the source of truth for the schema. Every reader and writer follows it:
+`ingitdb validate`, `ingitdb select` (including `--group`), and the storage drivers.
+
+| Parent `records_dir` | Parent record | Its `contacts` instance |
+| -------------------- | ------------- | ----------------------- |
+| omitted, `name: "{key}.yaml"` (default `$records`) | `spaces/$records/family.yaml` | `spaces/$records/family/contacts/` |
+| `.` | `spaces/family.yaml` | `spaces/family/contacts/` |
+| `data` | `spaces/data/family.yaml` | `spaces/data/family/contacts/` |
+| omitted, `name: "spaces.yaml"` (map of records) | key `family` in `spaces/spaces.yaml` | `spaces/family/contacts/` |
 
 With `records_dir: .` this is the Firestore path, one to one:
 
@@ -172,12 +186,31 @@ ext/commitius/cmSessions/s1.json                    <- ext/commitius.json does n
 ```
 
 **The parent record file is optional.** As in Firestore, a parent may own subcollections without
-existing itself: in the last line there is no `ext/commitius.json`. `ingitdb validate` finds the
+existing itself: in the last line there is no `ext/commitius.json`. Validation (ingitdb-go) finds the
 parent from the directory `ext/commitius/cmSessions/` and validates `s1.json` all the same, at any
 depth. A missing parent is not counted as a record of the parent collection. No placeholder file is
 needed (an empty `{}` parent file still works). Only a directory that contains the subcollection's
-own directory counts as a parent; hidden directories, `$records` and names matched by the parent's
-`exclude_regex` never do.
+own directory counts as a parent. Hidden directories, the names inGitDB writes itself (`$records`,
+`$views`, `$ingitdb`, the parent's own `records_dir`) and names matched by the parent's
+`exclude_regex` never do; any other name does, including a Firestore-style id such as `$x`. A
+parent directory that is a symbolic link counts only when it resolves inside the database; one that
+leads outside is not read, and `ingitdb validate` reports it as a warning.
+
+**Data in any other place is an error.** Earlier versions of the storage drivers wrote an instance
+at `<parent data dir>/<parentKey>/<sub>/` whatever the parent's `records_dir`. When the parent's
+`records_dir` is not `.`, files found there are not where the definition puts them:
+`ingitdb validate` fails with one error per such directory, naming the collection, the found path,
+the file count, the expected path and the fix, and `ingitdb select` and the drivers fail with the
+same details instead of reading the instance as empty. For example, with the default `records_dir`:
+
+```
+spaces/family/contacts/c1.yaml          <- error: belongs at spaces/$records/family/contacts/c1.yaml
+```
+
+Fix it by moving the files to the expected path, or, if the collection should use the
+Firestore-mirror layout, by setting `record_file.records_dir: "."` on the parent and moving its own
+records out of `$records/`. A database that kept data in the old place passed validation before
+(those records were never read) and fails now; that is intended.
 
 `ingitdb validate` prints one count line per subcollection, by its full schema path (for example
 `All 2 records are valid for collection: spaces/ext/days`), adding up all parent instances.
