@@ -422,7 +422,11 @@ id: collection ids alternating with parent keys, ending with a collection id. A 
 
 A parent key, literal or from a field, must be a plain record key: no `/` or `\`, and not `.` or `..`
 (a key such as `cal.endarius` is fine), so a
-path never reaches outside its parent's directory. The path is checked when the definition loads. Each value must be a record key of the one target
+path never reaches outside its parent's directory. One exception: when the parent collection declares
+`record_file.key_encoding`, a key from a field may be any non-empty key (`a/b`, `..`), because it is
+encoded into the parent's directory name (`a~2Fb`, `~2E~2E`) and so stays inside it. A literal is
+always a key, written as the plain segment it must be. `ingitdb select --from`, by contrast, names such
+a parent by its file name: `spaces/a~2Fb/notes`, not `spaces/a/b/notes`. The path is checked when the definition loads. Each value must be a record key of the one target
 instance the path gives for that record; a finding names the instance, e.g.
 `spaces/s2/ext/calendarius/financialAgreements`. No `$fk` view is built for a path, and
 dalgo2ingitdb does not check it at write time; `ingitdb validate` does.
