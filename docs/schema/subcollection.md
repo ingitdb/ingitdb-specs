@@ -194,7 +194,7 @@ own directory counts as a parent. Hidden directories, the names inGitDB writes i
 `$views`, `$ingitdb`, the parent's own `records_dir`) and names matched by the parent's
 `exclude_regex` never do; any other name does, including a Firestore-style id such as `$x`. A
 parent directory that is a symbolic link counts only when it resolves inside the database; one that
-leads outside is not read, and `ingitdb validate` reports it as a warning.
+leads outside is not read, and `ingitdb validate` reports it as an error naming the link, as `select --group` refuses it, so a pass that skipped records fails.
 
 **Data in any other place is an error.** Earlier versions of the storage drivers wrote an instance
 at `<parent data dir>/<parentKey>/<sub>/` whatever the parent's `records_dir`. When the parent's

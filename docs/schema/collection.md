@@ -190,7 +190,8 @@ Rules:
 
 - **One name per key.** A name decodes only if encoding the result gives it back. Any other name, such as `a~2f.yaml` or `a b.yaml`, names no record, and validation reports it.
 - **Letter case is kept.** On Windows and macOS, by default, `Ab.yaml` and `ab.yaml` are one file, and `Ab/` and `ab/` are one directory. Validation reports such pairs, record files and parent record directories alike, and writers refuse to create one. Reads and deletes are not checked.
-- **255-byte limit.** With one record per file, a key whose encoded file name would exceed 255 bytes is an error. Keys are never shortened. Store such records in a collection that keeps its records in one file (`map[$record_id]map[$field_name]any`).
+- **255-byte limit.** With one record per file, a key whose encoded file name would exceed 255 bytes is an error. Keys are never shortened. Store such records in a collection that keeps its records in one file (`map[$record_id]map[$field_name]any`). This holds for every one-record-per-file collection, with or without `key_encoding` (without one, the key is measured as it is): writers, the GitHub driver and `validate` fail with the length and this remedy. For a collection without `key_encoding` this adds an error only where a write already failed (every common file system refuses such a name) or where the GitHub driver committed a name no checkout can hold.
+- **Hidden files are skipped.** No key encodes to a name starting with `.`, so readers of a `tilde-v1` collection skip such a file (an editor lock, a macOS `._` file) instead of failing; `validate` still reports it as a name that names no record.
 - **Shared-file keys.** Keys inside a shared records file are not encoded there, only in their subcollection directories.
 - **Subcollections** declare their own `key_encoding`.
 
@@ -361,7 +362,19 @@ definition, recursively:
 - `values` — every value of a map (not `map[locale]string`), e.g. a map keyed by id whose values
   are objects. Its `type` must be the map's value type written the same way: `map[string]float`
   takes `values: {type: float}`, not `int`.
-- `items` — every element of a list `[]T`; its `type` must be `T`.
+- `items` — every element of a list `[]T`; its `type` must be `T` (for `[]any`, any element type).
+
+**A list of objects** is written `type: "[]any"` with `items: {type: map[string]any, columns: …}`; `[]map[...]` is not a column type. Each element must then be an object and is checked against `columns`:
+
+```yaml
+columns:
+  members:                    # [{"role": "owner"}, {"role": "viewer"}]
+    type: "[]any"
+    items:
+      type: map[string]any
+      columns:
+        role: { type: string, required: true }
+```
 
 ```yaml
 columns:
