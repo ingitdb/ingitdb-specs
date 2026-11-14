@@ -150,19 +150,17 @@ columns:
 
 ## 📂 Where subcollection records live
 
-A subcollection has one instance per parent record. Its records live in a directory named by the
-parent key, next to the parent's record files:
+A subcollection has one instance per parent record. With the parent's `records_dir: .`, its records
+live in a directory named by the parent key, inside the parent's data directory:
 
 ```
-<parent data dir>/<parent records_dir>/<parentKey>/<sub>/
+<parent data dir>/<parentKey>/<sub>/
 ```
 
-`<parent records_dir>` is the parent's `record_file.records_dir` (`.` means the data directory
-itself; the default is `$records` when the parent's `name` contains `{key}`). Inside that directory
-the subcollection's own `record_file` applies, exactly as for a root collection. The rule repeats at
-every depth.
-
-With `records_dir: .` this is the Firestore path, one to one:
+Inside that directory the subcollection's own `record_file` applies, exactly as for a root
+collection, and the rule repeats at every depth. Every inGitDB tool agrees on this layout:
+`ingitdb validate`, `ingitdb select`, and the storage drivers (dalgo2ingitdb, dalgo2ingitdb4local).
+It is the Firestore path, one to one:
 
 ```
 spaces/k3v9q.json                                   <- record spaces/k3v9q
@@ -176,8 +174,25 @@ existing itself: in the last line there is no `ext/commitius.json`. Validation (
 parent from the directory `ext/commitius/cmSessions/` and validates `s1.json` all the same, at any
 depth. A missing parent is not counted as a record of the parent collection. No placeholder file is
 needed (an empty `{}` parent file still works). Only a directory that contains the subcollection's
-own directory counts as a parent; hidden directories, `$`-prefixed ones (`$records`, `$views`) and
-names matched by the parent's `exclude_regex` never do.
+own directory counts as a parent. Hidden directories, the names inGitDB writes itself (`$records`,
+`$views`, `$ingitdb`, the parent's own `records_dir`) and names matched by the parent's
+`exclude_regex` never do; any other name does, including a Firestore-style id such as `$x`. A
+parent directory that is a symbolic link counts only when it resolves inside the database; one that
+leads outside is not read, and `ingitdb validate` reports it as a warning.
+
+> **Open decision: the default `records_dir`.** When the parent keeps its records in a
+> `records_dir` other than `.` (the default is `$records` when the parent's `name` contains
+> `{key}`), the tools disagree today about where a subcollection instance lives:
+>
+> | Location | Read by |
+> | -------- | ------- |
+> | `<parent data dir>/<records_dir>/<parentKey>/<sub>/` (e.g. `orders/$records/ord045/order_details/`) | `ingitdb validate` (ingitdb-go) |
+> | `<parent data dir>/<parentKey>/<sub>/` (e.g. `spaces/family/contacts/`) | `ingitdb select` and the storage drivers, which also write there |
+>
+> Which one applies is not decided yet. Until it is, `ingitdb validate` reports records it finds in
+> the second location as a warning naming both, instead of passing them as `0 records`, and
+> `ingitdb select --group` refuses such parents. Use `records_dir: .` for subcollections to stay
+> clear of the question.
 
 `ingitdb validate` prints one count line per subcollection, by its full schema path (for example
 `All 2 records are valid for collection: spaces/ext/days`), adding up all parent instances.
