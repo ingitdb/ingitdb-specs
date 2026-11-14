@@ -266,7 +266,10 @@ Each entry under `columns` is a **ColumnDef** keyed by the field name.
 | `min_value`     | `number`                                         | Inclusive lower bound (numeric columns) |
 | `max_value`     | `number`                                         | Inclusive upper bound (numeric columns) |
 | `enum`          | list                                             | Permitted values                  |
-| `foreign_key`   | `string`                                         | Id of the root collection whose record keys the value must match; a bare id is tried module-first. A list value is checked element by element |
+| `foreign_key`   | `string`                                         | Id of the root collection whose record keys the value must match; a bare id is tried module-first. A list value is checked element by element. May name a subcollection by path (see below) |
+| `columns`       | `map[string]ColumnDef`                           | Fields of a nested object (see below) |
+| `values`        | `ColumnDef`                                      | Shape of every value of a map (see below) |
+| `items`         | `ColumnDef`                                      | Shape of every element of a list (see below) |
 | `locale`        | `string`                                         | Locale shortcut (see below)       |
 | `format`        | `string`                                         | Free-form content hint (markdown, html, uri, ...); not validated |
 | `formula`       | `string`                                         | Starlark expression of a computed column; its value is never stored |
@@ -296,6 +299,59 @@ columns:
   $ID:
     type: date   # days/2026-11-24.json passes, days/notadate.json fails
 ```
+
+### 🔹 Nested objects, maps and lists (`columns`, `values`, `items`)
+
+A map or list column checks only that the value is a map or a list. To check what is inside, give it
+a shape with the same column definition, recursively:
+
+- `columns` — the fields of a nested object (on `any` or a map type). A key the object holds but
+  `columns` does not declare is an undeclared-field finding.
+- `values` — every value of a map, e.g. a map keyed by id whose values are objects.
+- `items` — every element of a list.
+
+```yaml
+columns:
+  slots:                      # {"sl1": {"durationInMinutes": 45, "weekdays": ["tu"]}}
+    type: map[string]any
+    values:
+      type: map[string]any
+      columns:
+        durationInMinutes:
+          type: int
+          required: true
+        weekdays:
+          type: "[]string"
+          items:
+            type: string
+            enum: [mo, tu, we, th, fr, sa, su]
+  ref:                        # {"happeningID": "h1", "spaceID": "s1"}
+    type: map[string]any
+    columns:
+      happeningID: { type: string, required: true }
+      spaceID: { type: string, required: true }
+```
+
+Findings name the path: `slots.sl1.durationInMinutes`, `members[2].role`. A nested definition
+supports `type`, `required`, `enum`, lengths, value ranges and its own `columns`/`values`/`items`;
+`formula`, `required_when`, `foreign_key` and `locale` are top-level only. A column without a shape is
+checked as before.
+
+### 🔹 Foreign keys into subcollections
+
+`foreign_key` may name a subcollection by a path like a Firestore document path without the final
+id: collection ids alternating with parent keys, ending with a collection id. A parent key is:
+
+| Key segment | Meaning | Example |
+| ----------- | ------- | ------- |
+| a literal   | that parent record | `foreign_key: ext/commitius/cmSessions` |
+| `$same`     | the key the referring record itself has at that level (only while the path follows the referring collection's own path) | `foreign_key: spaces/$same/ext/$same/financialAgreements` (same space and extension) |
+| `{field}`   | the referring record's value of `field` | `foreign_key: spaces/{spaceID}/ext/calendarius/happenings` |
+
+The path is checked when the definition loads. Each value must be a record key of the one target
+instance the path gives for that record; a finding names the instance, e.g.
+`spaces/s2/ext/calendarius/financialAgreements`. No `$fk` view is built for a path, and
+dalgo2ingitdb does not check it at write time; `ingitdb validate` does.
 
 ---
 
